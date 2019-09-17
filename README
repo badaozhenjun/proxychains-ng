@@ -1,3 +1,11 @@
+Addition:
+   添加fix_chain_len的选项，当且仅当RANDOM模式下生效
+   比如添加配置:
+	fix_chain_len = 2
+   这样会将最后2个串成链作为固定链，然后再在前面的代理中随机选择，组成配置chain_len长度的代理链
+
+
+
 ProxyChains-NG ver 4.14 README
 =============================
 
