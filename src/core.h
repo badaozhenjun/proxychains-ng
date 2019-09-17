@@ -77,9 +77,9 @@ typedef struct {
 	char pass[256];
 } proxy_data;
 
-int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
-			 proxy_data * pd, unsigned int proxy_count, chain_type ct,
-			 unsigned int max_chain );
+int connect_proxy_chain(int sock, ip_type target_ip,
+			unsigned short target_port, proxy_data * pd,
+			unsigned int proxy_count, chain_type ct, unsigned int max_chain,unsigned int fix_chain_len);
 
 void proxychains_write_log(char *str, ...);
 

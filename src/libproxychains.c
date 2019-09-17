@@ -68,6 +68,7 @@ unsigned int proxychains_proxy_count = 0;
 unsigned int proxychains_proxy_offset = 0;
 int proxychains_got_chain_data = 0;
 unsigned int proxychains_max_chain = 1;
+unsigned int proxychains_fix_chain_len = 0;
 int proxychains_quiet_mode = 0;
 int proxychains_resolver = 0;
 localaddr_arg localnet_addr[MAX_LOCALNET];
@@ -343,6 +344,7 @@ inv_host:
 				if(port_n)
 					count++;
 			} else {
+			
 				if(strstr(buff, "[ProxyList]")) {
 					list = 1;
 				} else if(strstr(buff, "random_chain")) {
@@ -405,7 +407,19 @@ inv_host:
 					} else {
 						fprintf(stderr, "# of localnet exceed %d.\n", MAX_LOCALNET);
 					}
-				} else if(strstr(buff, "chain_len")) {
+				} else if(strstr(buff, "fix_chain_len")) {
+					
+					char *pc;
+					int len;
+					pc = strchr(buff, '=');
+					
+					if(!pc) {
+						fprintf(stderr, "error: missing equals sign '=' in fix_chain_len directive.\n");
+						exit(1);
+					}
+					len = atoi(++pc);
+					proxychains_fix_chain_len = (len ? len : 1);
+				}else if(strstr(buff, "chain_len")) {
 					char *pc;
 					int len;
 					pc = strchr(buff, '=');
@@ -415,7 +429,7 @@ inv_host:
 					}
 					len = atoi(++pc);
 					proxychains_max_chain = (len ? len : 1);
-				} else if(strstr(buff, "quiet_mode")) {
+				}else if(strstr(buff, "quiet_mode")) {
 					proxychains_quiet_mode = 1;
 				} else if(strstr(buff, "proxy_dns")) {
 					proxychains_resolver = 1;
@@ -516,14 +530,14 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 		fcntl(sock, F_SETFL, !O_NONBLOCK);
 
 	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
-
+	
 	ret = connect_proxy_chain(sock,
 				  dest_ip,
 				  htons(port),
-				  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain);
+				  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain,proxychains_fix_chain_len);
 
 	fcntl(sock, F_SETFL, flags);
-	if(ret != SUCCESS)
+	if(ret != SUCCESS) 
 		errno = ECONNREFUSED;
 	return ret;
 }

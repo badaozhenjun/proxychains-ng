@@ -487,7 +487,24 @@ static proxy_data *select_proxy(select_type how, proxy_data * pd, unsigned int p
 		i = 0;
 	return (pd[i].ps == PLAY_STATE) ? &pd[i] : NULL;
 }
+static proxy_data *select_fix_proxy(proxy_data * pd, unsigned int proxy_count, unsigned int fix_proxy_index, unsigned int fix_proxy_count, unsigned int *offset) {
+	unsigned int i = 0, k = 0;
+	if(*offset >= proxy_count)
+		return NULL;
+	
+	
+	do {
+		k++;
+		// i = rand() % proxy_count;
+		i = proxy_count  - (fix_proxy_count - fix_proxy_index);
+	} while(pd[i].ps != PLAY_STATE && k < proxy_count * 100);
 
+		
+	
+	if(i >= proxy_count)
+		i = proxy_count - 1;
+	return (pd[i].ps == PLAY_STATE) ? &pd[i] : NULL;
+}
 
 static void release_all(proxy_data * pd, unsigned int proxy_count) {
 	unsigned int i;
@@ -560,9 +577,9 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 
 int connect_proxy_chain(int sock, ip_type target_ip,
 			unsigned short target_port, proxy_data * pd,
-			unsigned int proxy_count, chain_type ct, unsigned int max_chain) {
+			unsigned int proxy_count, chain_type ct, unsigned int max_chain,unsigned int fix_chain_len) {
 	proxy_data p4;
-	proxy_data *p1, *p2, *p3;
+	proxy_data *p1, *p2, *p3,*pp;
 	int ns = -1;
 	int rc = -1;
 	unsigned int offset = 0;
@@ -686,12 +703,41 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			if(alive_count < max_chain)
 				goto error_more;
 			curr_len = offset = 0;
-			do {
-				if(!(p1 = select_proxy(RANDOMLY, pd, proxy_count, &offset)))
-					goto error_more;
-			} while(SUCCESS != start_chain(&ns, p1, RT) && offset < max_chain);
-			while(++curr_len < max_chain) {
-				if(!(p2 = select_proxy(RANDOMLY, pd, proxy_count, &offset)))
+	
+			if (fix_chain_len>0){
+
+				int fix_index = 0;
+				//proxy_data * pd, unsigned int proxy_count, unsigned int fix_proxy_index, unsigned int fix_proxy_count, unsigned int *offset
+				do {
+					if(!(p1 = select_fix_proxy(pd, proxy_count,fix_index,fix_chain_len,&offset)))
+						goto error_fix_proxy_error;
+					proxychains_write_log("fix_index -- %d\n",fix_index);
+					fix_index++;
+				} while(SUCCESS != start_chain(&ns, p1, RT) && offset < max_chain);
+				for(int i=fix_index;i<fix_chain_len-fix_index;i++){
+					proxychains_write_log("fix_index -- %d\n",i);
+					if(!(pp = select_fix_proxy(pd, proxy_count,i,fix_chain_len,&offset)))
+						goto error_fix_proxy_error;
+					if(SUCCESS != chain_step(ns, p1, pp)) {
+						PDEBUG("GOTO AGAIN 2\n");
+						goto error_fix_proxy_error;
+					}
+					p1 = pp;
+				}
+				if(fix_index==0){
+					goto error_fix_proxy_error;
+				}
+				curr_len = fix_index-1;
+			}else{
+				do {
+					if(!(p1 = select_proxy(RANDOMLY, pd, proxy_count-fix_chain_len, &offset)))
+						goto error_more;
+				} while(SUCCESS != start_chain(&ns, p1, RT) && offset < max_chain);
+			}
+			
+			while(++curr_len < (max_chain)) {
+				// proxychains_write_log("curr_len:%d < max_chain:%d\n",curr_len,max_chain);
+				if(!(p2 = select_proxy(RANDOMLY, pd, proxy_count-fix_chain_len, &offset)))
 					goto error_more;
 				if(SUCCESS != chain_step(ns, p1, p2)) {
 					PDEBUG("GOTO AGAIN 2\n");
@@ -719,6 +765,8 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 
 	error_more:
 	proxychains_write_log("\n!!!need more proxies!!!\n");
+	error_fix_proxy_error:
+	proxychains_write_log("\nerror_fix_proxy_error!!!\n");
 	error_strict:
 	PDEBUG("error\n");
 	
